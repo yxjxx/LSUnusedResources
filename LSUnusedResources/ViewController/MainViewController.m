@@ -11,7 +11,7 @@
 #import "ResourceStringSearcher.h"
 
 // Constant strings
-static NSString * const kDefaultResourceSuffixs    = @"imageset;jpg;gif;png";
+static NSString * const kDefaultResourceSuffixs    = @"imageset;jpg;gif;png;webp";
 static NSString * const kTableColumnImageIcon      = @"ImageIcon";
 static NSString * const kTableColumnImageShortName = @"ImageShortName";
 static NSString * const kTableColumnFileSize       = @"FileSize";
@@ -50,10 +50,13 @@ static NSString * const kTableColumnFileSize       = @"FileSize";
 @property (weak) IBOutlet NSButton *exportButton;
 @property (weak) IBOutlet NSButton *deleteButton;
 
-@property (strong, nonatomic) NSMutableArray *unusedResults;
+@property (strong, nonatomic) NSMutableArray *unusedResults;//<ResourceFileInfo *>
 @property (assign, nonatomic) BOOL isFileDone;
 @property (assign, nonatomic) BOOL isStringDone;
 @property (strong, nonatomic) NSDate *startTime;
+
+@property (nonatomic, copy) NSString *codePath;
+@property (nonatomic, copy) NSString *pbfileLocation;
 
 - (IBAction)onBrowseButtonClicked:(id)sender;
 - (IBAction)onSearchButtonClicked:(id)sender;
@@ -107,6 +110,9 @@ static NSString * const kTableColumnFileSize       = @"FileSize";
 - (IBAction)onSearchButtonClicked:(id)sender {
     // Check if user has selected or entered a path
     NSString *projectPath = self.pathTextField.stringValue;
+    if (projectPath.length <= 0) {
+        projectPath = @"/Users/yxj/Desktop/OneCarpoolDev/DeleteDuplicatedImage/ONECarpool";
+    }
     if (!projectPath.length) {
         [self showAlertWithStyle:NSWarningAlertStyle title:@"Path Error" subtitle:@"Project path is empty"];
         return;
@@ -118,6 +124,7 @@ static NSString * const kTableColumnFileSize       = @"FileSize";
         [self showAlertWithStyle:NSWarningAlertStyle title:@"Path Error" subtitle:@"Project folder is not exists"];
         return;
     }
+    self.codePath = projectPath;
     
     self.startTime = [NSDate date];
     
@@ -125,19 +132,23 @@ static NSString * const kTableColumnFileSize       = @"FileSize";
     [[ResourceFileSearcher sharedObject] reset];
     [[ResourceStringSearcher sharedObject] reset];
     
-    [self.unusedResults removeAllObjects];
+    [self.unusedResults removeAllObjects];//unusedResults NSMutableArray<ResourceFileInfo *>, 主界面的数据源
     [self.resultsTableView reloadData];
-    [self setUIEnabled:NO];
+    [self setUIEnabled:NO];//开始搜索，禁用 UI 交互
     self.isFileDone = NO;
-    self.isStringDone = NO;
+    self.isStringDone = NO;//初始化状态
     
     NSArray *resourceSuffixs = [self resourceSuffixs];
     if (!self.resourceSuffixs.count) {
         [self showAlertWithStyle:NSWarningAlertStyle title:@"Suffix Error" subtitle:@"Resource suffix is invalid"];
         return ;
     }
-    NSArray *fileSuffixs = [self includeFileSuffixs];
+    NSArray *fileSuffixs = [self includeFileSuffixs];//要去检索的是否有引用图片的文件类型？
+    //排除的文件夹，好像有 bug？
     NSArray *excludeFolders = self.excludeFolderTextField.stringValue.length ? [self.excludeFolderTextField.stringValue componentsSeparatedByString:@";"] : nil;
+    if (!excludeFolders) {
+        excludeFolders = @[@"Project", @"docs", @"Pods"];
+    }
     
     [[ResourceFileSearcher sharedObject] startWithProjectPath:projectPath excludeFolders:excludeFolders resourceSuffixs:resourceSuffixs];
     [[ResourceStringSearcher sharedObject] startWithProjectPath:projectPath excludeFolders:excludeFolders resourceSuffixs:resourceSuffixs fileSuffixs:fileSuffixs];
@@ -177,14 +188,16 @@ static NSString * const kTableColumnFileSize       = @"FileSize";
         NSArray *results = [self.unusedResults copy];
         NSIndexSet *selectedIndexSet = self.resultsTableView.selectedRowIndexes;
         NSUInteger index = [selectedIndexSet firstIndex];
+        NSMutableArray *toRemoveReferenceFiles = [NSMutableArray array];
         while (index != NSNotFound) {
             if (index < results.count) {
                 ResourceFileInfo *info = [results objectAtIndex:index];
                 [[NSFileManager defaultManager] removeItemAtURL:[NSURL fileURLWithPath:info.path] error:nil];
+                [toRemoveReferenceFiles addObject:info.name];
             }
             index = [selectedIndexSet indexGreaterThanIndex:index];
         }
-        
+        [self removeReferenceFileLines:toRemoveReferenceFiles];
         [self.unusedResults removeObjectsAtIndexes:selectedIndexSet];
         [self.resultsTableView reloadData];
         [self updateUnusedResultsCount];
@@ -193,6 +206,58 @@ static NSString * const kTableColumnFileSize       = @"FileSize";
         [alert setMessageText:@"Please select first."];
         [alert runModal];
     }
+}
+/*
+ //还需要删除 /Users/yxj/Library/Developer/Xcode/DerivedData/OneTravel-akukjnbplxnurwddecvkprozvjub/ 不然编译会报错 或者可以
+ //同时删除 xcode 中 reference 比较方便
+ // /Users/yxj/Desktop/OneCarpoolDev/DeleteDuplicatedImage/Pods/Pods.xcodeproj/project.pbxproj 删除这个文件中引用了要删除文件的行
+ //1. 取到当前所在目录
+ //2. 拼接 /Pods/Pods.xcodeproj/project.pbxproj
+ //3. 读取 pbxproj 文件内容，去掉待删文件相关行
+ //4. 写回 pbxproj 文件
+ */
+- (void)removeReferenceFileLines:(NSMutableArray *)toRemoveReferenceFiles {
+    NSString *pbxprojFileLocation = self.pbfileLocation;
+    NSString *content = [NSString stringWithContentsOfFile:pbxprojFileLocation encoding:NSUTF8StringEncoding error:nil];
+    if (!content) {
+        return;
+    }
+    NSArray *lines = [content componentsSeparatedByString:@"\n"];
+    NSMutableArray *resultM = [NSMutableArray array];
+    for (NSString *line in lines) {
+        if (![self containReferedFile:toRemoveReferenceFiles lineStr:line]) {
+            [resultM addObject:line];
+        }
+    }
+    //写回 pb 文件
+    NSMutableString *outputPbfile = [[NSMutableString alloc] init];
+    NSString *outputPath = self.pbfileLocation;
+    //最后一行不要 append \n
+    [resultM enumerateObjectsUsingBlock:^(NSString *line, NSUInteger idx, BOOL * _Nonnull stop) {
+        if (idx == [resultM count]-1) {
+            [outputPbfile appendFormat:@"%@", line];
+        } else {
+            [outputPbfile appendFormat:@"%@\n", line];
+        }
+    }];
+    NSError *writeError = nil;
+    [outputPbfile writeToFile:outputPath atomically:YES encoding:NSUTF8StringEncoding error:&writeError];
+    
+    // Check write result
+    if (writeError == nil) {
+        [self showAlertWithStyle:NSInformationalAlertStyle title:@"Export Complete" subtitle:[NSString stringWithFormat:@"delete Complete: %@", outputPath]];
+    } else {
+        [self showAlertWithStyle:NSCriticalAlertStyle title:@"Export Error" subtitle:[NSString stringWithFormat:@"delete Error: %@", writeError]];
+    }
+}
+
+- (BOOL)containReferedFile:(NSMutableArray *)filenames lineStr:(NSString *)line{
+    for (NSString *filename in filenames) {
+        if ([line containsString:filename]) {
+            return YES;
+        }
+    }
+    return NO;
 }
 
 #pragma mark - NSNotification
@@ -357,12 +422,20 @@ static NSString * const kTableColumnFileSize       = @"FileSize";
     
     if (self.isFileDone && self.isStringDone) {
         NSArray *resNames = [[[ResourceFileSearcher sharedObject].resNameInfoDict allKeys] sortedArrayUsingSelector:@selector(localizedCaseInsensitiveCompare:)];
-        for (NSString *name in resNames) {
-            if (![[ResourceStringSearcher sharedObject] containsResourceName:name]) {
-                if (!self.ignoreSimilarCheckbox.state
-                    || ![[ResourceStringSearcher sharedObject] containsSimilarResourceName:name]) {
+        for (NSString *name in resNames) { //遍历文件名列表
+            if (![[ResourceStringSearcher sharedObject] containsResourceName:name]) { //代码里面出现过的字符串集合不包含这个文件名，需要添加到未使用资源数组中
+                if (!self.ignoreSimilarCheckbox.state || ![[ResourceStringSearcher sharedObject] containsSimilarResourceName:name]) {//未勾选忽略相似文件或者不含有相似文件
                     [self.unusedResults addObject:[ResourceFileSearcher sharedObject].resNameInfoDict[name]];
                 }
+                //上面这个 if 等价于下面这个复杂点的
+//                //进一步检查，如果开启了想忽略相似文件，还需做进一步检查
+//                if (self.ignoreSimilarCheckbox.state){
+//                    if (![[ResourceStringSearcher sharedObject] containsSimilarResourceName:name]) { //检查到不包含相似文件名，可以添加
+//                        [self.unusedResults addObject:[ResourceFileSearcher sharedObject].resNameInfoDict[name]];
+//                    }
+//                } else { // 如果没有开启忽略相似文件，直接 add
+//                    [self.unusedResults addObject:[ResourceFileSearcher sharedObject].resNameInfoDict[name]];
+//                }
             }
         }
         
@@ -370,6 +443,16 @@ static NSString * const kTableColumnFileSize       = @"FileSize";
         
         [self setUIEnabled:YES];
     }
+}
+// /Users/yxj/Desktop/OneCarpoolDev/DeleteDuplicatedImage/Pods/Pods.xcodeproj/project.pbxproj 删除这个文件中引用了要删除文件的行
+//1. 取到当前所在目录
+//2. 拼接 /Pods/Pods.xcodeproj/project.pbxproj
+- (NSString *)pbfileLocation {
+    if (!_pbfileLocation) {
+        _pbfileLocation = [[NSString alloc] init];
+        _pbfileLocation = [[self.codePath stringByDeletingLastPathComponent] stringByAppendingPathComponent:@"/Pods/Pods.xcodeproj/project.pbxproj"];
+    }
+    return _pbfileLocation;
 }
 
 @end

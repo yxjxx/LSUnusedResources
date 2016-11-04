@@ -13,7 +13,7 @@ extern NSString * const kNotificationResourceStringQueryDone;
 
 @interface ResourceStringSearcher : NSObject
 
-@property (strong, nonatomic, readonly) NSMutableSet *resStringSet;
+@property (strong, nonatomic, readonly) NSMutableSet *resStringSet; //主要产出，代码里面引用到了的文件名
 
 + (instancetype)sharedObject;
 

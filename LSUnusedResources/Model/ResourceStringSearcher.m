@@ -110,7 +110,8 @@ typedef NS_ENUM(NSUInteger, LSFileType) {
         
         for (NSString *res in self.resStringSet) {
             if (hasSameSuffix && !hasSamePrefix) {
-                if ([res hasPrefix:prefix]) {
+                //前缀并且不完全相等
+                if ([res hasPrefix:prefix] && ![res isEqualToString:prefix]) {
                     return YES;
                 }
             }
@@ -147,6 +148,21 @@ typedef NS_ENUM(NSUInteger, LSFileType) {
 {
     // Get all the files at dir
     NSError *error = nil;
+    /*
+     取到的是相对 dir 的路径
+     (lldb) po files
+     <__NSArrayM 0x600000055840>(
+     docs,
+     LICENSE,
+     MD5,
+     Merge develop_master.sh,
+     one-pod.sh,
+     one-update.sh,
+     one_podVersionConfig,
+     ONECarpool.podspec,
+     ONECarpool.xcodeproj,
+
+     */
     NSArray *files = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:dir error:&error];
     if (files.count == 0) {
         return NO;
@@ -161,11 +177,11 @@ typedef NS_ENUM(NSUInteger, LSFileType) {
         }
         
         NSString *tempPath = [dir stringByAppendingPathComponent:file];
-        if ([self isDirectory:tempPath]) {
+        if ([self isDirectory:tempPath]) {//如果是目录，递归处理
             [self handleFilesAtPath:tempPath];
         } else {
             LSFileType fileType = [self fileTypeByName:file];
-            if (fileType == LSFileTypeNone) {
+            if (fileType == LSFileTypeNone) { //无后缀文件直接跳过
                 continue;
             } else {
                 [self parseFileAtPath:tempPath withType:fileType];
@@ -182,10 +198,11 @@ typedef NS_ENUM(NSUInteger, LSFileType) {
     }
     
     NSString *pattern = nil;
-    NSInteger groupIndex = -1;
+    NSInteger groupIndex = -1; //groupIndex 的作用是什么？
     switch (fileType) {
         case LSFileTypeObjC:
             pattern = @"@\"(.+?)\"";//@"imageNamed:@\"(.+)\"";//or: (imageNamed|contentOfFile):@\"(.*)\" // http://www.raywenderlich.com/30288/nsregularexpression-tutorial-and-cheat-sheet
+//            pattern = @"DCImage\\(@\"(.+?)\"\\)"; //匹配括号要用 \\( 这个 pattern 可以匹配到 DCImage(@"fdadf");
             groupIndex = 1;
             break;
         case LSFileTypeSwift:
@@ -226,14 +243,14 @@ typedef NS_ENUM(NSUInteger, LSFileType) {
 - (NSArray *)getMatchStringWithContent:(NSString *)content pattern:(NSString*)pattern groupIndex:(NSInteger)index
 {
     NSRegularExpression* regexExpression = [NSRegularExpression regularExpressionWithPattern:pattern options:NSRegularExpressionCaseInsensitive error:nil];
-    NSArray* matchs = [regexExpression matchesInString:content options:0 range:NSMakeRange(0, content.length)];
+    NSArray* matchs = [regexExpression matchesInString:content options:0 range:NSMakeRange(0, content.length)];//range 是全部范围
     
     if (matchs.count) {
         NSMutableArray *list = [NSMutableArray array];
         for (NSTextCheckingResult *checkingResult in matchs) {
             NSString *res = [content substringWithRange:[checkingResult rangeAtIndex:index]];
             res = [res lastPathComponent];
-//            res = [StringUtils stringByRemoveResourceSuffix:res];
+            res = [StringUtils stringByRemoveResourceSuffix:res];
             [list addObject:res];
         }
         return list;

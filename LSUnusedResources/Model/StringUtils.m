@@ -15,7 +15,11 @@ static NSString * const kSuffix3x = @"@3x";
 
 + (NSString *)stringByRemoveResourceSuffix:(NSString *)str {
     NSString *suffix = [str pathExtension];
-    return [self stringByRemoveResourceSuffix:str suffix:suffix];
+    if (suffix.length > 0) {
+        return [self stringByRemoveResourceSuffix:str suffix:suffix];
+    } else {
+        return str;
+    }
 }
 
 + (NSString *)stringByRemoveResourceSuffix:(NSString *)str suffix:(NSString *)suffix {

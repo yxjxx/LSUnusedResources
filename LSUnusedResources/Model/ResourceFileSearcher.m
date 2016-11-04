@@ -65,10 +65,10 @@ static NSString * const kSuffixPng         = @"png";
 
 
 - (void)startWithProjectPath:(NSString *)projectPath excludeFolders:(NSArray *)excludeFolders resourceSuffixs:(NSArray *)resourceSuffixs {
-    if (self.isRunning) {
+    if (self.isRunning) { //单例类，如果正在运行直接返回
         return;
     }
-    if (projectPath.length == 0 || resourceSuffixs.count == 0) {
+    if (projectPath.length == 0 || resourceSuffixs.count == 0) { // NSArray *resourceSuffixs <NSString *>
         return;
     }
     
@@ -95,7 +95,9 @@ static NSString * const kSuffixPng         = @"png";
                 continue;
             }
             
-            NSString *keyName = [StringUtils stringByRemoveResourceSuffix:name];
+            //这样写只能检测出 2x or 3x 其中的一个
+//            NSString *keyName = [StringUtils stringByRemoveResourceSuffix:name];
+            NSString *keyName = name;
 
             if (!tempResNameInfoDict[keyName]) {
                 BOOL isDir = NO;
@@ -121,13 +123,20 @@ static NSString * const kSuffixPng         = @"png";
     NSMutableArray *resources = [NSMutableArray array];
     
     for (NSString *fileType in suffixs) {
-        // list of path<NSString>
+        // list of path<NSString *>
+        /*
+         (lldb) po lines (即 pathList)
+         <__NSArrayM 0x618000c53b30>(
+         /Users/yxj/Desktop/OneCarpoolDev/DeletingImage/ONECarpool/Pod/Assets/contacts_guide_route_setting@2x.webp,
+         /Users/yxj/Desktop/OneCarpoolDev/DeletingImage/ONECarpool/Pod/Assets/route_manager_default@3x.webp,
+         )
+         */
         NSArray *pathList = [self searchDirectory:directoryPath excludeFolders:excludeFolders forFiletype:fileType];
         if (pathList.count) {
-            if (![fileType isEqualTo:kSuffixPng]) {
+            if (![fileType isEqualTo:kSuffixPng]) { //不是 png 格式，
                 [resources addObjectsFromArray:pathList];
             } else {
-                for (NSString *path in pathList) {
+                for (NSString *path in pathList) { //是 png 格式且不在这些目录下 这么处理的目的是什么？？
                     // if the resource file is not in xxx/xxx.imageset/; xx/LaunchImage.launchimage; xx/AppIcon.appiconset
                     if ([path rangeOfString:kSuffixImageSet].location == NSNotFound
                         && [path rangeOfString:kSuffixBundle].location == NSNotFound
@@ -197,7 +206,7 @@ static NSString * const kSuffixPng         = @"png";
     return nil;
 }
 
-// Toooooo Sloooooow
+// Toooooo Sloooooow 没有使用了
 - (NSArray *)searchDirectory:(NSString *)directoryPath excludeFolders:(NSArray *)excludeFolders forFiletypes:(NSArray *)filetypes {
     // find -E . -iregex ".*\.(html|plist)" ! -path "*/Movies/*" ! -path "*/Downloads/*" ! -path "*/Music/*"
     // Create a find task
