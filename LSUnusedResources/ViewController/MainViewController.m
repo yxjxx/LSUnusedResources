@@ -245,9 +245,9 @@ static NSString * const kTableColumnFileSize       = @"FileSize";
     
     // Check write result
     if (writeError == nil) {
-        [self showAlertWithStyle:NSInformationalAlertStyle title:@"Export Complete" subtitle:[NSString stringWithFormat:@"delete Complete: %@", outputPath]];
+        [self showAlertWithStyle:NSInformationalAlertStyle title:@"Delete Complete" subtitle:[NSString stringWithFormat:@"Delete Complete: %@", outputPath]];
     } else {
-        [self showAlertWithStyle:NSCriticalAlertStyle title:@"Export Error" subtitle:[NSString stringWithFormat:@"delete Error: %@", writeError]];
+        [self showAlertWithStyle:NSCriticalAlertStyle title:@"Delete Error" subtitle:[NSString stringWithFormat:@"Delete Error: %@", writeError]];
     }
 }
 
