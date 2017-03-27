@@ -41,6 +41,7 @@ static NSString * const kTableColumnFileSize       = @"FileSize";
 @property (weak) IBOutlet NSButton *xibCheckbox;
 @property (weak) IBOutlet NSButton *sbCheckbox;
 @property (weak) IBOutlet NSButton *jsonCheckbox;
+@property (weak) IBOutlet NSButton *javaScriptCheckbox;
 
 @property (weak) IBOutlet NSButton *ignoreSimilarCheckbox;
 
@@ -155,6 +156,8 @@ static NSString * const kTableColumnFileSize       = @"FileSize";
     
     [[ResourceFileSearcher sharedObject] startWithProjectPath:projectPath excludeFolders:excludeFolders resourceSuffixs:resourceSuffixs];
     [[ResourceStringSearcher sharedObject] startWithProjectPath:projectPath excludeFolders:excludeFolders resourceSuffixs:resourceSuffixs fileSuffixs:fileSuffixs];
+
+    [self setUIEnabled:NO];
 }
 
 - (IBAction)onExportButtonClicked:(id)sender {
@@ -268,27 +271,11 @@ static NSString * const kTableColumnFileSize       = @"FileSize";
 - (void)onResourceFileQueryDone:(NSNotification *)notification {
     self.isFileDone = YES;
     [self searchUnusedResourcesIfNeeded];
-    //统计总数
-    if(self.unusedResults.count > 0){
-        uint64_t countSize = 0;
-        for(ResourceFileInfo *info in self.unusedResults){
-            countSize += info.fileSize;
-        }
-        self.statusLabel.stringValue = [self.statusLabel.stringValue stringByAppendingString:[NSString stringWithFormat:@",total size is:%.2f(KB)", countSize / 1024.0]];
-    }
 }
 
 - (void)onResourceStringQueryDone:(NSNotification *)notification {
     self.isStringDone = YES;
     [self searchUnusedResourcesIfNeeded];
-    //统计总数
-    if(self.unusedResults.count > 0){
-        uint64_t countSize = 0;
-        for(ResourceFileInfo *info in self.unusedResults){
-            countSize += info.fileSize;
-        }
-        self.statusLabel.stringValue = [self.statusLabel.stringValue stringByAppendingString:[NSString stringWithFormat:@",total size is:%.2f(KB)", countSize / 1024.0]];
-    }
 }
 
 #pragma mark - <NSTableViewDelegate>
@@ -404,7 +391,10 @@ static NSString * const kTableColumnFileSize       = @"FileSize";
     if ([self.sbCheckbox state]) {
         [suffixs addObject:@"storyboard"];
     }
-    
+    if ([self.javaScriptCheckbox state]) {
+        [suffixs addObject:@"js"];
+    }
+
     if (suffixs.count == 0) {
         [suffixs addObject:@"m"];
     }
@@ -435,6 +425,7 @@ static NSString * const kTableColumnFileSize       = @"FileSize";
     [_headerCheckbox setEnabled:state];
     [_htmlCheckbox setEnabled:state];
     [_jsonCheckbox setEnabled:state];
+    [_javaScriptCheckbox setEnabled:state];
     [_plistCheckbox setEnabled:state];
     [_cssCheckbox setEnabled:state];
     [_swiftCheckbox setEnabled:state];
@@ -451,9 +442,12 @@ static NSString * const kTableColumnFileSize       = @"FileSize";
 - (void)updateUnusedResultsCount {
     [self.processIndicator stopAnimation:self];
     NSUInteger count = self.unusedResults.count;
-    NSString *tips = count > 2 ? @"resources" : @"resource";
     NSTimeInterval time = [[NSDate date] timeIntervalSinceDate:self.startTime];
-    self.statusLabel.stringValue = [NSString stringWithFormat:@"%ld unsued %@. time %.2fs", (long)count, tips, time];
+    NSUInteger totalSize = 0;
+    for(ResourceFileInfo *info in self.unusedResults){
+        totalSize += info.fileSize;
+    }
+    self.statusLabel.stringValue = [NSString stringWithFormat:@"unsued: %ld, time: %.2fs, size: %.2f KB", (long)count, time, (long)totalSize / 1024.0];
 }
 
 - (void)searchUnusedResourcesIfNeeded {
