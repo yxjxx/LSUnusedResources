@@ -149,10 +149,11 @@ static NSString * const kTableColumnFileSize       = @"FileSize";
     }
     NSArray *fileSuffixs = [self includeFileSuffixs];//要去检索的是否有引用图片的文件类型？
     //排除的文件夹，好像有 bug？
-    NSArray *excludeFolders = self.excludeFolderTextField.stringValue.length ? [self.excludeFolderTextField.stringValue componentsSeparatedByString:@";"] : nil;
+    NSMutableArray *excludeFolders = [(self.excludeFolderTextField.stringValue.length ? [self.excludeFolderTextField.stringValue componentsSeparatedByString:@";"] : nil) mutableCopy];
     if (!excludeFolders) {
-        excludeFolders = @[@"Project", @"docs", @"Pods"];
+        excludeFolders = [@[@"Project", @"docs", @"Pods"] mutableCopy];
     }
+    [excludeFolders addObject:@"navi"];//customization for Carpool
     
     [[ResourceFileSearcher sharedObject] startWithProjectPath:projectPath excludeFolders:excludeFolders resourceSuffixs:resourceSuffixs];
     [[ResourceStringSearcher sharedObject] startWithProjectPath:projectPath excludeFolders:excludeFolders resourceSuffixs:resourceSuffixs fileSuffixs:fileSuffixs];
